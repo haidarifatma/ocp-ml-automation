@@ -1,0 +1,13 @@
+# Modèles entraînés (régénérés à chaque run par le workflow, inutile de les versionner)
+model_rf.joblib
+model_iso.joblib
+training_report.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
