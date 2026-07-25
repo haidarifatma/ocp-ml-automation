@@ -1,8 +1,9 @@
+# Réactivation du cron - forcer la resynchronisation GitHub
 name: OCP MineGuard — Entraînement & synchronisation ML
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 jobs:
