@@ -55,8 +55,19 @@ ISO_PATH = os.path.join(MODEL_DIR, "model_iso.joblib")
 REPORT_PATH = os.path.join(MODEL_DIR, "training_report.json")
 
 
-def fetch_all_rows(page_size: int = 1000) -> pd.DataFrame:
-    """Récupère TOUT l'historique de ocp_sensor_data par pagination (Supabase REST)."""
+def fetch_all_rows(page_size: int = 500) -> pd.DataFrame:
+    """
+    Récupère TOUT l'historique de ocp_sensor_data par pagination (Supabase REST).
+
+    Note importante : Supabase (PostgREST) impose un plafond serveur
+    "Max rows" (Settings → Data API → Max rows), qui peut couper une
+    requête bien en-dessous du volume réel de la table, SANS lever
+    d'erreur — la requête réussit, mais retourne un sous-ensemble. C'est
+    pour ça qu'on compare systématiquement le nombre de lignes réellement
+    récupérées au comptage exact renvoyé par Supabase (`count="exact"`),
+    et qu'on avertit clairement si les deux ne correspondent pas, plutôt
+    que d'entraîner silencieusement le modèle sur un historique tronqué.
+    """
     from supabase import create_client
     if not SUPABASE_KEY:
         raise RuntimeError(
@@ -65,13 +76,23 @@ def fetch_all_rows(page_size: int = 1000) -> pd.DataFrame:
         )
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+    # Comptage exact du nombre total de lignes côté serveur, pour pouvoir
+    # vérifier ensuite qu'on a bien tout récupéré.
+    count_res = (
+        client.table("ocp_sensor_data")
+        .select("id", count="exact")
+        .limit(1)
+        .execute()
+    )
+    total_expected = count_res.count if count_res.count is not None else None
+
     all_rows = []
     offset = 0
     while True:
         res = (
             client.table("ocp_sensor_data")
             .select("*")
-            .order("timestamp", desc=False)
+            .order("id", desc=False)  # tri sur une clé stable (id), plus fiable que timestamp pour la pagination
             .range(offset, offset + page_size - 1)
             .execute()
         )
@@ -82,9 +103,26 @@ def fetch_all_rows(page_size: int = 1000) -> pd.DataFrame:
         offset += page_size
         if len(batch) < page_size:
             break
+        # Garde-fou : si Supabase applique un plafond serveur strict qui
+        # coupe pile à un multiple rond (ex: 10 000), on le détecte ici
+        # en comparant au comptage exact, et on continue quand même à
+        # essayer (au cas où ce ne serait qu'un ralentissement), mais on
+        # avertira après la boucle si le total ne correspond pas.
+        if total_expected is not None and offset >= total_expected:
+            break
 
     if not all_rows:
         raise RuntimeError("Aucune donnée trouvée dans ocp_sensor_data.")
+
+    fetched_count = len(all_rows)
+    if total_expected is not None and fetched_count < total_expected:
+        print(
+            f"      ⚠️  ATTENTION : Supabase indique {total_expected} lignes au total, "
+            f"mais seulement {fetched_count} ont pu être récupérées.\n"
+            f"      -> Vérifie le réglage 'Max rows' dans Supabase "
+            f"(Settings → Data API → Max rows) : s'il est réglé bas "
+            f"(ex: 1000 ou 10000), augmente-le pour permettre la pagination complète."
+        )
 
     df = pd.DataFrame(all_rows)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
