@@ -177,6 +177,24 @@ def main():
     df = fetch_recent_data(client)
     print(f"      -> {len(df)} lectures, {df['equipment_id'].nunique()} équipements")
 
+    # Diagnostic détaillé : pour chaque équipement, montre la toute dernière
+    # lecture de capteurs et si une panne (machine_failure=1) apparaît
+    # QUELQUE PART dans la fenêtre récente chargée. Si machine_failure=1
+    # apparaît même une seule fois dans les 60 dernières lignes, label_state()
+    # va classer TOUTE cette ligne en Failure (priorité absolue), ce qui peut
+    # suffire à faire glisser toute la fenêtre de tendance de l'équipement.
+    print("\n      --- Diagnostic par équipement (fenêtre récente chargée) ---")
+    for eq_id, g in df.sort_values("timestamp").groupby("equipment_id"):
+        last = g.iloc[-1]
+        n_failures_in_window = int((g["machine_failure"] == 1).sum())
+        print(
+            f"      eq={eq_id} ({last['equipment_name']}) : dernière lecture "
+            f"temp={last['temperature']:.1f} hum={last['humidity']:.1f} "
+            f"vib={last['vibration']:.1f} light={last['light']:.1f} "
+            f"machine_failure={int(last['machine_failure'])} | "
+            f"pannes dans la fenêtre de {len(g)} lignes: {n_failures_in_window}"
+        )
+
     print("\n[3/5] Feature engineering...")
     df = add_trend_features(df)
     X_all = build_feature_matrix(df)[feature_names]
