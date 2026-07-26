@@ -73,17 +73,48 @@ def get_client():
 
 
 def fetch_recent_data(client) -> pd.DataFrame:
-    res = (
+    """
+    Récupère les lectures récentes de ocp_sensor_data, PAR ÉQUIPEMENT.
+
+    Important : on ne peut pas se contenter d'un simple
+    `.order(timestamp desc).limit(2000)` global, car si les équipements
+    n'écrivent pas tous à la même fréquence, un équipement peu actif (peu
+    de nouvelles lectures) peut se retrouver totalement absent de la
+    fenêtre des 2000 lignes les plus récentes globalement — noyé par les
+    autres équipements plus bavards. Le pipeline retomberait alors sur ses
+    lectures les plus anciennes disponibles pour lui (potentiellement une
+    période de panne passée), et prédirait un risque complètement obsolète
+    et déconnecté de son état réel actuel.
+
+    On interroge donc chaque equipment_id séparément, avec sa propre
+    limite, pour garantir que CHAQUE équipement contribue ses lectures les
+    plus récentes à lui, indépendamment du volume des autres.
+    """
+    ids_res = (
         client.table("ocp_sensor_data")
-        .select("*")
-        .order("timestamp", desc=True)
-        .limit(2000)
+        .select("equipment_id")
         .execute()
     )
-    rows = res.data or []
-    if not rows:
+    equipment_ids = sorted({r["equipment_id"] for r in (ids_res.data or []) if r.get("equipment_id") is not None})
+    if not equipment_ids:
+        raise RuntimeError("Aucune donnée dans ocp_sensor_data.")
+
+    all_rows = []
+    for eq_id in equipment_ids:
+        res = (
+            client.table("ocp_sensor_data")
+            .select("*")
+            .eq("equipment_id", eq_id)
+            .order("timestamp", desc=True)
+            .limit(LOOKBACK_ROWS_PER_EQUIP)
+            .execute()
+        )
+        all_rows.extend(res.data or [])
+
+    if not all_rows:
         raise RuntimeError("Aucune donnée récente dans ocp_sensor_data.")
-    df = pd.DataFrame(rows)
+
+    df = pd.DataFrame(all_rows)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.dropna(subset=["timestamp"])
     for col in SENSOR_COLS:
