@@ -90,26 +90,19 @@ def fetch_recent_data(client) -> pd.DataFrame:
     limite, pour garantir que CHAQUE équipement contribue ses lectures les
     plus récentes à lui, indépendamment du volume des autres.
     """
-    # Liste des equipment_id : on essaie d'abord la table dédiée `equipment`
-    # (plus légère et plus fiable qu'un scan de toute ocp_sensor_data), avec
-    # repli sur l'ancienne méthode si cette table n'existe pas / est vide.
-    equipment_ids = []
-    try:
-        eq_table_res = client.table("equipment").select("id").execute()
-        equipment_ids = sorted({r["id"] for r in (eq_table_res.data or []) if r.get("id") is not None})
-        print(f"      (liste des équipements récupérée depuis la table 'equipment' : {equipment_ids})")
-    except Exception as e:
-        print(f"      (table 'equipment' indisponible ou différente : {e})")
-
-    if not equipment_ids:
-        ids_res = (
-            client.table("ocp_sensor_data")
-            .select("equipment_id")
-            .limit(50000)
-            .execute()
-        )
-        equipment_ids = sorted({r["equipment_id"] for r in (ids_res.data or []) if r.get("equipment_id") is not None})
-        print(f"      (liste des équipements récupérée depuis ocp_sensor_data : {equipment_ids})")
+    # Liste des equipment_id distincts. On scanne ocp_sensor_data directement
+    # (avec une limite explicite pour éviter tout plafond serveur implicite) :
+    # la table `equipment` séparée utilise des identifiants textuels (ex:
+    # "equip1") différents des equipment_id entiers utilisés ici, donc on ne
+    # peut pas s'en servir pour cette jointure.
+    ids_res = (
+        client.table("ocp_sensor_data")
+        .select("equipment_id")
+        .limit(50000)
+        .execute()
+    )
+    equipment_ids = sorted({r["equipment_id"] for r in (ids_res.data or []) if r.get("equipment_id") is not None})
+    print(f"      (équipements détectés dans ocp_sensor_data : {equipment_ids})")
 
     if not equipment_ids:
         raise RuntimeError("Aucune donnée dans ocp_sensor_data.")
