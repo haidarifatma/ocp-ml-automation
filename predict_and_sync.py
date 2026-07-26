@@ -90,12 +90,27 @@ def fetch_recent_data(client) -> pd.DataFrame:
     limite, pour garantir que CHAQUE équipement contribue ses lectures les
     plus récentes à lui, indépendamment du volume des autres.
     """
-    ids_res = (
-        client.table("ocp_sensor_data")
-        .select("equipment_id")
-        .execute()
-    )
-    equipment_ids = sorted({r["equipment_id"] for r in (ids_res.data or []) if r.get("equipment_id") is not None})
+    # Liste des equipment_id : on essaie d'abord la table dédiée `equipment`
+    # (plus légère et plus fiable qu'un scan de toute ocp_sensor_data), avec
+    # repli sur l'ancienne méthode si cette table n'existe pas / est vide.
+    equipment_ids = []
+    try:
+        eq_table_res = client.table("equipment").select("id").execute()
+        equipment_ids = sorted({r["id"] for r in (eq_table_res.data or []) if r.get("id") is not None})
+        print(f"      (liste des équipements récupérée depuis la table 'equipment' : {equipment_ids})")
+    except Exception as e:
+        print(f"      (table 'equipment' indisponible ou différente : {e})")
+
+    if not equipment_ids:
+        ids_res = (
+            client.table("ocp_sensor_data")
+            .select("equipment_id")
+            .limit(50000)
+            .execute()
+        )
+        equipment_ids = sorted({r["equipment_id"] for r in (ids_res.data or []) if r.get("equipment_id") is not None})
+        print(f"      (liste des équipements récupérée depuis ocp_sensor_data : {equipment_ids})")
+
     if not equipment_ids:
         raise RuntimeError("Aucune donnée dans ocp_sensor_data.")
 
@@ -109,7 +124,9 @@ def fetch_recent_data(client) -> pd.DataFrame:
             .limit(LOOKBACK_ROWS_PER_EQUIP)
             .execute()
         )
-        all_rows.extend(res.data or [])
+        batch = res.data or []
+        print(f"      equipment_id={eq_id} -> {len(batch)} lignes récupérées (demandé: {LOOKBACK_ROWS_PER_EQUIP})")
+        all_rows.extend(batch)
 
     if not all_rows:
         raise RuntimeError("Aucune donnée récente dans ocp_sensor_data.")
