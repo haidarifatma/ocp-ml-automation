@@ -26,11 +26,15 @@ import numpy as np
 import pandas as pd
 
 # ===== SEUILS (alignés sur THRESH dans app.js) =====
+# IMPORTANT : pour "light", warn > crit car c'est une lumière BASSE qui est
+# anormale (capteur optique obstrué / matière bloquant le faisceau), à
+# l'inverse de temperature/humidity/vibration où c'est une valeur HAUTE qui
+# est anormale.
 THRESH = {
     "temperature": {"warn": 50, "crit": 75, "max": 100},
     "humidity":    {"warn": 70, "crit": 95, "max": 100},
     "vibration":   {"warn": 400, "crit": 600, "max": 1000},
-    "light":       {"warn": 800, "crit": 800, "max": 1000},
+    "light":       {"warn": 300, "crit": 150, "max": 1000},
 }
 
 SENSOR_COLS = ["temperature", "humidity", "vibration", "light"]
@@ -56,10 +60,23 @@ def sensor_severity(value: float, metric: str) -> float:
     seuil critique, >100 = au-delà du seuil critique.
     """
     t = THRESH[metric]
+
     if metric == "light":
-        # Pour la luminosité, seul le dépassement du seuil compte (capteur
-        # de type "présence de lumière anormale" plutôt qu'un gradient).
-        return 100.0 * value / t["crit"] if t["crit"] else 0.0
+        # Polarité inversée : une lumière BASSE indique un problème
+        # (capteur obstrué / matière bloquant le faisceau optique), une
+        # lumière HAUTE est normale. warn=300, crit=150, max=1000.
+        if value >= t["warn"]:
+            # zone normale (300 -> max) : sévérité 0 -> 60, décroissante
+            # avec value (plus c'est haut, plus c'est sain)
+            return 60.0 * (t["max"] - value) / max(t["max"] - t["warn"], 1e-6)
+        if value >= t["crit"]:
+            # zone warning (150 -> 300) : sévérité 60 -> 100
+            span = max(t["warn"] - t["crit"], 1e-6)
+            return 60.0 + 40.0 * (t["warn"] - value) / span
+        # en dessous du seuil critique (< 150) : sévérité > 100
+        under = t["crit"] - value
+        return 100.0 + 40.0 * (under / max(t["crit"], 1e-6))
+
     if value <= t["warn"]:
         # 0 -> 60 dans la zone normale (approche progressive du warn)
         return 60.0 * value / max(t["warn"], 1e-6)
@@ -104,13 +121,18 @@ def compute_trend_bonus(row: pd.Series) -> float:
     Bonus de score ajouté quand plusieurs capteurs montrent une dérive
     positive récente (dégradation progressive), même si les valeurs
     instantanées ne sont pas encore critiques.
+
+    Pour "light", une dérive "dégradante" est une BAISSE (delta négatif),
+    pas une hausse comme pour les autres capteurs -> on utilise -delta.
     """
     bonus = 0.0
     for m in ["temperature", "vibration", "humidity"]:
         delta = row.get(f"{m}_delta5", 0.0)
         if delta > 0:
-            # normalisé grossièrement par le seuil critique du capteur
             bonus += min(delta / THRESH[m]["crit"] * 25.0, 8.0)
+    light_delta = row.get("light_delta5", 0.0)
+    if light_delta < 0:
+        bonus += min((-light_delta) / max(THRESH["light"]["warn"], 1e-6) * 25.0, 8.0)
     return bonus
 
 
