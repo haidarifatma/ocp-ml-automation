@@ -5,10 +5,9 @@ const SUPABASE_KEY = "sb_publishable_G8QH-43Js3hCDE3IGRs2ww_pjT65efR";
 const THRESH = {
   temperature: { warn: 50, crit: 75, unit: '°C', max: 100 },
   humidity:    { warn: 70, crit: 95, unit: '%',  max: 100 },
-  vibration:   { warn: 400, crit: 600, unit: 'Hz', max: 1000 },
-  light:       { warn: 800, crit: 800, unit: 'lux', max: 1000 }
+  vibration:   { warn: 400, crit: 600, unit: 'Hz', max: 1000 }
 };
-const METRIC_LABELS = { temperature: 'Temp.', humidity: 'Hum.', vibration: 'Vib.', light: 'Lum.' };
+const METRIC_LABELS = { temperature: 'Temp.', humidity: 'Hum.', vibration: 'Vib.' };
 const EQ_COLORS = ['#8BC34A', '#607D8B', '#E0A430', '#4FA3D1', '#C77DFF'];
 const ZONE_COLOR = { normal: '#8BC34A', warning: '#E0A430', critical: '#D6524A' };
 
@@ -81,21 +80,15 @@ function statusOf(row) {
 
 function zoneOf(metric, value) {
   const t = THRESH[metric];
-  if (metric === 'light') { return value > t.crit ? 'critical' : 'normal'; }
   if (value > t.crit) return 'critical';
   if (value > t.warn) return 'warning';
   return 'normal';
 }
 
 // Sévérité progressive par capteur (0 = normal, 60 = au seuil warn, 100 = au
-// seuil crit, >100 au-delà). Remplace l'ancien ratio brut value/crit*100 qui
-// faisait exploser le risque sur le capteur "light" (seuil crit proche de la
-// plage normale) — aligné avec sensor_severity() du pipeline Python.
+// seuil crit, >100 au-delà) — aligné avec sensor_severity() du pipeline Python.
 function sensorSeverity(metric, value) {
   const t = THRESH[metric];
-  if (metric === 'light') {
-    return t.crit ? (100 * value / t.crit) : 0;
-  }
   if (value <= t.warn) return 60 * value / Math.max(t.warn, 1e-6);
   if (value <= t.crit) {
     const span = Math.max(t.crit - t.warn, 1e-6);
@@ -107,8 +100,8 @@ function sensorSeverity(metric, value) {
 
 // Poids par capteur (alignés avec SENSOR_WEIGHTS dans ml_common.py) : la
 // vibration et la température sont les indicateurs mécaniques les plus
-// parlants, humidité/luminosité ont un rôle secondaire.
-const SENSOR_WEIGHTS = { temperature: 0.35, vibration: 0.40, humidity: 0.15, light: 0.10 };
+// parlants, l'humidité a un rôle secondaire.
+const SENSOR_WEIGHTS = { temperature: 0.40, vibration: 0.45, humidity: 0.15 };
 
 // Renvoie le risque de panne (%) pour un équipement en donnant la priorité
 // au vrai modèle ML (state.ml.predictions, alimenté par predict_and_sync.py)
@@ -186,18 +179,13 @@ function gaugeSVG(metric, value) {
   const cx = 50, cy = 54, r = 40;
   const toAngle = v => -90 + (Math.min(Math.max(v, min), max) - min) / (max - min) * 180;
   const warnA = toAngle(t.warn);
-  const critA = toAngle(metric === 'light' ? t.crit : t.crit);
+  const critA = toAngle(t.crit);
   const valA = toAngle(value);
   const zone = zoneOf(metric, value);
   let segs = '';
-  if (metric === 'light') {
-    segs += `<path d="${describeArc(cx,cy,r,-90,critA)}" stroke="#8BC34A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-    segs += `<path d="${describeArc(cx,cy,r,critA,90)}" stroke="#D6524A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-  } else {
-    segs += `<path d="${describeArc(cx,cy,r,-90,warnA)}" stroke="#8BC34A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-    segs += `<path d="${describeArc(cx,cy,r,warnA,critA)}" stroke="#E0A430" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-    segs += `<path d="${describeArc(cx,cy,r,critA,90)}" stroke="#D6524A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
-  }
+  segs += `<path d="${describeArc(cx,cy,r,-90,warnA)}" stroke="#8BC34A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
+  segs += `<path d="${describeArc(cx,cy,r,warnA,critA)}" stroke="#E0A430" stroke-width="8" fill="none" stroke-linecap="round"/>`;
+  segs += `<path d="${describeArc(cx,cy,r,critA,90)}" stroke="#D6524A" stroke-width="8" fill="none" stroke-linecap="round"/>`;
   const needle = polarToCartesian(cx, cy, r - 11, valA);
   return `<svg viewBox="0 0 100 68">
     <path d="${describeArc(cx,cy,r,-90,90)}" stroke="rgba(230,232,227,0.08)" stroke-width="8" fill="none" stroke-linecap="round"/>
@@ -564,7 +552,7 @@ function renderML() {
   const ml = state.ml; // null tant que ml_results n'est pas encore alimentée
 
   setText('mlSourceNote', ml
-    ? `Modèle réel · entraîné le ${new Date(ml.trained_at).toLocaleDateString('fr-FR')} sur ${ml.training_rows || '—'} lectures`
+    ? `Modèle réel · entraîné le ${new Date(ml.trained_at).toLocaleDateString('fr-FR')} à ${new Date(ml.trained_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} sur ${ml.training_rows || '—'} lectures`
     : '⚠ Mode démonstration — modèle pas encore synchronisé (voir predict_and_sync.py)');
 
   // ----- Métriques Random Forest -----
