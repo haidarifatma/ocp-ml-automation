@@ -190,7 +190,7 @@ def main():
         print(
             f"      eq={eq_id} ({last['equipment_name']}) : dernière lecture "
             f"temp={last['temperature']:.1f} hum={last['humidity']:.1f} "
-            f"vib={last['vibration']:.1f} light={last['light']:.1f} "
+            f"vib={last['vibration']:.1f} "
             f"machine_failure={int(last['machine_failure'])} | "
             f"pannes dans la fenêtre de {len(g)} lignes: {n_failures_in_window}"
         )
@@ -285,7 +285,6 @@ def main():
             "Température": report["feature_importance"]["temperature"],
             "Vibration": report["feature_importance"]["vibration"],
             "Humidité": report["feature_importance"]["humidity"],
-            "Luminosité": report["feature_importance"]["light"],
         },
         "predictions": predictions,
         "synced_at": datetime.now(timezone.utc).isoformat(),
