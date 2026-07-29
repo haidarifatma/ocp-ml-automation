@@ -223,13 +223,11 @@ function demoData() {
       temperature: 38 + drift * 0.9 + Math.random() * 3,
       humidity: 50 + drift * 0.5 + Math.random() * 4,
       vibration: 180 + drift * 9 + Math.random() * 20,
-      light: 300 + Math.random() * 120,
       machine_failure: drift > 32 ? 1 : 0,
       status: drift > 32 ? 'critical' : (drift > 18 ? 'warning' : 'normal'),
       temp_failure: drift > 32 ? 1 : 0,
       humidity_failure: 0,
-      vibration_failure: drift > 28 ? 1 : 0,
-      light_failure: 0
+      vibration_failure: drift > 28 ? 1 : 0
     });
     rows.push({
       equipment_id: 5,
@@ -239,13 +237,11 @@ function demoData() {
       temperature: 32 + Math.random() * 6,
       humidity: 55 + Math.random() * 8,
       vibration: 150 + Math.random() * 60,
-      light: 400 + Math.random() * 200,
       machine_failure: 0,
       status: 'normal',
       temp_failure: 0,
       humidity_failure: 0,
-      vibration_failure: 0,
-      light_failure: 0
+      vibration_failure: 0
     });
     rows.push({
       equipment_id: 7,
@@ -255,13 +251,11 @@ function demoData() {
       temperature: 45 + Math.random() * 10,
       humidity: 40 + Math.random() * 12,
       vibration: 200 + Math.random() * 80,
-      light: 250 + Math.random() * 100,
       machine_failure: 0,
       status: 'normal',
       temp_failure: 0,
       humidity_failure: 0,
-      vibration_failure: 0,
-      light_failure: 0
+      vibration_failure: 0
     });
   }
   return rows;
@@ -438,8 +432,7 @@ function renderEquipmentPage() {
         <div class="alert-row"><span class="alert-time">Température</span><span>${latest.temperature.toFixed(1)} °C</span><span class="badge ${zoneOf('temperature', latest.temperature)}">${zoneOf('temperature', latest.temperature)}</span></div>
         <div class="alert-row"><span class="alert-time">Humidité</span><span>${latest.humidity.toFixed(1)} %</span><span class="badge ${zoneOf('humidity', latest.humidity)}">${zoneOf('humidity', latest.humidity)}</span></div>
         <div class="alert-row"><span class="alert-time">Vibration</span><span>${latest.vibration.toFixed(1)} Hz</span><span class="badge ${zoneOf('vibration', latest.vibration)}">${zoneOf('vibration', latest.vibration)}</span></div>
-        <div class="alert-row"><span class="alert-time">Luminosité</span><span>${latest.light.toFixed(1)} lux</span><span class="badge ${zoneOf('light', latest.light)}">${zoneOf('light', latest.light)}</span></div>
-      </div>
+       </div>
     </div>
   `;
   document.querySelectorAll('.equipment-item').forEach(btn => {
@@ -516,7 +509,6 @@ function renderAlerts() {
     if (r.temp_failure) triggers.push('température');
     if (r.humidity_failure) triggers.push('humidité');
     if (r.vibration_failure) triggers.push('vibration');
-    if (r.light_failure) triggers.push('luminosité');
     const detail = triggers.length ? `Seuil dépassé : ${triggers.join(', ')}` : 'Paramètres hors plage normale';
     return `<div class="alert-row">
       <span class="alert-time">${timeAgo(r.timestamp)}</span>
@@ -609,7 +601,6 @@ function renderML() {
       : [
         { name: 'Vibration', value: 93 },
         { name: 'Température', value: 84 },
-        { name: 'Courant', value: 68 },
         { name: 'Humidité', value: 41 }
       ];
     featuresEl.innerHTML = fi.map(item =>
@@ -642,9 +633,7 @@ function renderSettings() {
     ['humWarn', THRESH.humidity.warn],
     ['humCrit', THRESH.humidity.crit],
     ['vibWarn', THRESH.vibration.warn],
-    ['vibCrit', THRESH.vibration.crit],
-    ['lightWarn', THRESH.light.warn],
-    ['lightCrit', THRESH.light.crit]
+    ['vibCrit', THRESH.vibration.crit]
   ];
   fields.forEach(([id, value]) => {
     const el = $(id);
@@ -721,8 +710,7 @@ async function renderCharts(equipId, range = currentRange) {
   const defs = [
     { key: 'temperature', canvas: 'chartTemp', color: '#8BC34A', thrEl: 'thrTemp' },
     { key: 'humidity', canvas: 'chartHum', color: '#607D8B', thrEl: 'thrHum' },
-    { key: 'vibration', canvas: 'chartVib', color: '#E0A430', thrEl: 'thrVib' },
-    { key: 'light', canvas: 'chartLight', color: '#4FA3D1', thrEl: 'thrLight' }
+    { key: 'vibration', canvas: 'chartVib', color: '#E0A430', thrEl: 'thrVib' }
   ];
 
   defs.forEach(d => {
@@ -769,8 +757,6 @@ function saveSettings() {
   THRESH.humidity.crit = Number($('humCrit').value) || THRESH.humidity.crit;
   THRESH.vibration.warn = Number($('vibWarn').value) || THRESH.vibration.warn;
   THRESH.vibration.crit = Number($('vibCrit').value) || THRESH.vibration.crit;
-  THRESH.light.warn = Number($('lightWarn').value) || THRESH.light.warn;
-  THRESH.light.crit = Number($('lightCrit').value) || THRESH.light.crit;
   setText('settingsStatus', '✅ Seuils enregistrés avec succès.');
   if (selectedEquipmentId) renderCharts(selectedEquipmentId, currentRange);
 }
@@ -779,7 +765,6 @@ function resetSettings() {
   THRESH.temperature = { warn: 50, crit: 75, unit: '°C', max: 100 };
   THRESH.humidity = { warn: 70, crit: 95, unit: '%', max: 100 };
   THRESH.vibration = { warn: 400, crit: 600, unit: 'Hz', max: 1000 };
-  THRESH.light = { warn: 800, crit: 800, unit: 'lux', max: 1000 };
   renderSettings();
   setText('settingsStatus', '🔄 Seuils réinitialisés.');
   if (selectedEquipmentId) renderCharts(selectedEquipmentId, currentRange);
