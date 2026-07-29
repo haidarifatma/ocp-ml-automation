@@ -217,7 +217,7 @@ function demoData() {
     const drift = Math.max(0, 40 - i * 0.6);
     rows.push({
       equipment_id: 3,
-      equipment_name: 'Pompe Centrifuge',
+      equipment_name: 'Pompe ',
       location: "Centre OCP Laayoune",
       timestamp: t.toISOString(),
       temperature: 38 + drift * 0.9 + Math.random() * 3,
@@ -230,8 +230,8 @@ function demoData() {
       vibration_failure: drift > 28 ? 1 : 0
     });
     rows.push({
-      equipment_id: 5,
-      equipment_name: 'Convoyeur Nord',
+      equipment_id: 2,
+      equipment_name: 'Convoyeur ',
       location: "Centre OCP Laayoune",
       timestamp: t.toISOString(),
       temperature: 32 + Math.random() * 6,
@@ -244,8 +244,8 @@ function demoData() {
       vibration_failure: 0
     });
     rows.push({
-      equipment_id: 7,
-      equipment_name: 'Broyeur 03',
+      equipment_id: 1,
+      equipment_name: 'Broyeur ',
       location: "Centre OCP Laayoune",
       timestamp: t.toISOString(),
       temperature: 45 + Math.random() * 10,
@@ -578,9 +578,9 @@ function renderML() {
     const predData = ml && ml.predictions
       ? ml.predictions.map(p => ({ name: p.equipment_name, detail: p.detail, risk: p.risk_pct, cls: p.risk_class }))
       : [
-        { name: 'Pompe Centrifuge', detail: 'Donnée de démonstration', risk: 87, cls: 'high' },
-        { name: 'Convoyeur Nord', detail: 'Donnée de démonstration', risk: 64, cls: 'medium' },
-        { name: 'Broyeur 03', detail: 'Donnée de démonstration', risk: 28, cls: 'low' }
+        { name: 'Pompe ', detail: 'Donnée de démonstration', risk: 87, cls: 'high' },
+        { name: 'Convoyeur', detail: 'Donnée de démonstration', risk: 64, cls: 'medium' },
+        { name: 'Broyeur ', detail: 'Donnée de démonstration', risk: 28, cls: 'low' }
       ];
     predictionsEl.innerHTML = predData.map(p =>
       `<div class="prediction-row ${p.cls}">
